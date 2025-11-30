@@ -12,12 +12,15 @@ Data pipeline utilities for Hunyuan-LeJEPA.
 """
 
 import math
+import os
 import random
 from io import BytesIO
 from typing import Dict, Iterator, Tuple
 
 import datasets
 import torch
+from pathlib import Path
+
 from PIL import Image
 from torch.utils.data import IterableDataset
 from torchvision.transforms import functional as TF
@@ -70,11 +73,13 @@ class HybridDocumentStream(IterableDataset):
         max_size: int = 1024,
         mask_ratio: Tuple[float, float] = (0.3, 0.5),
         seed: int = 0,
+        pdfa_local_dir: str = None,
     ):
         super().__init__()
         self.max_size = max_size
         self.mask_ratio = mask_ratio
         self.rng = random.Random(seed)
+        self.pdfa_local_dir = pdfa_local_dir or os.environ.get("PDFA_WDS_DIR")
         self.sources = [
             ("rvl_cdip", 0.5, "hf", "chainyo/rvl-cdip"),
             ("pdfa", 0.3, "wds", None),
@@ -89,13 +94,23 @@ class HybridDocumentStream(IterableDataset):
                 self.datasets[name] = ds
                 self.iters[name] = iter(ds.shuffle(buffer_size=2048, seed=seed))
             elif kind == "wds":
-                url = (
-                    "https://huggingface.co/datasets/pixparse/pdfa-eng-wds/resolve/main/"
-                    "pdfa-eng-train-{000000..000099}.tar"
-                )
+                # Prefer local tar shards if provided to avoid network flakiness.
+                urls = None
+                if self.pdfa_local_dir:
+                    local_dir = Path(self.pdfa_local_dir)
+                    urls = sorted(str(p) for p in local_dir.glob("*.tar"))
+                    if not urls:
+                        print(f"[HybridDocumentStream] No local PDFa tar shards found in {local_dir}")
+
+                if not urls:
+                    urls = (
+                        "https://huggingface.co/datasets/pixparse/pdfa-eng-wds/resolve/main/"
+                        "pdfa-eng-train-{000000..000099}.tar"
+                    )
+
                 ds = (
                     wds.WebDataset(
-                        url,
+                        urls,
                         resampled=True,
                         handler=wds.handlers.warn_and_continue,
                         shardshuffle=True,
