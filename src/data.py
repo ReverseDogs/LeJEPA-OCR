@@ -93,13 +93,22 @@ class HybridDocumentStream(IterableDataset):
                     "https://huggingface.co/datasets/pixparse/pdfa-eng-wds/resolve/main/"
                     "pdfa-eng-train-{000000..000099}.tar"
                 )
-                ds = wds.WebDataset(url, resampled=True).shuffle(1000).decode("pil")
+                ds = (
+                    wds.WebDataset(
+                        url,
+                        resampled=True,
+                        handler=wds.handlers.warn_and_continue,
+                        shardshuffle=True,
+                    )
+                    .shuffle(1000)
+                    .decode("pil")
+                )
                 self.datasets[name] = ds
                 self.iters[name] = iter(ds)
         self.weights = [w for _, w, _, _ in self.sources]
 
     def _get_image(self, sample: Dict) -> Image.Image:
-        for key in ("image", "img", "jpg", "png"):
+        for key in ("image", "img", "jpg", "jpeg", "png"):
             if key in sample:
                 img = sample[key]
                 break
