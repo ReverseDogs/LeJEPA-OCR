@@ -200,8 +200,9 @@ class TextImagePairStream(IterableDataset):
         self.image_key = image_key
         self.answer_key = answer_key
         self.max_size = max_size
+        shuffle_buf = int(os.environ.get("TEXT_SHUFFLE_BUFFER", "128"))
         self.ds = datasets.load_dataset(dataset_name, split=split, streaming=True)
-        self.iter = iter(self.ds.shuffle(buffer_size=2048, seed=seed))
+        self.iter = iter(self.ds.shuffle(buffer_size=shuffle_buf, seed=seed))
 
     def _get_image(self, sample: Dict) -> Image.Image:
         img = sample[self.image_key]
@@ -218,7 +219,8 @@ class TextImagePairStream(IterableDataset):
             try:
                 sample = next(self.iter)
             except StopIteration:
-                self.iter = iter(self.ds.shuffle(buffer_size=2048))
+                shuffle_buf = int(os.environ.get("TEXT_SHUFFLE_BUFFER", "128"))
+                self.iter = iter(self.ds.shuffle(buffer_size=shuffle_buf))
                 sample = next(self.iter)
             text = None
             if self.answer_key and self.answer_key in sample:
