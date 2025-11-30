@@ -34,8 +34,13 @@ def build_dataloader(
     workers: int,
     max_len: int,
     max_res: int,
+    answer_key: str = None,
 ) -> DataLoader:
-    dataset = TextImagePairStream(dataset_name=dataset_name, max_size=max_res)
+    dataset = TextImagePairStream(
+        dataset_name=dataset_name,
+        max_size=max_res,
+        answer_key=answer_key,
+    )
 
     def collate(batch):
         images = torch.stack([b["image"] for b in batch])
@@ -73,9 +78,23 @@ def load_checkpoint_if_available(model: HunyuanLeJEPA, path: str):
         return
     ckpt = torch.load(path, map_location="cpu")
     state = ckpt.get("model", ckpt)
-    missing, unexpected = model.load_state_dict(state, strict=False)
-    if missing or unexpected:
-        print(f"Checkpoint loaded with missing={missing}, unexpected={unexpected}")
+    model_state = model.state_dict()
+    filtered = {}
+    skipped = []
+    for k, v in state.items():
+        if k.startswith("decoder."):
+            continue  # decoder shapes differ between phases; skip
+        if k not in model_state:
+            continue
+        if model_state[k].shape != v.shape:
+            skipped.append((k, v.shape, model_state[k].shape))
+            continue
+        filtered[k] = v
+    missing, unexpected = model.load_state_dict(filtered, strict=False)
+    print(
+        f"Loaded checkpoint with {len(filtered)} tensors. "
+        f"Missing={len(missing)}, unexpected={len(unexpected)}, skipped_shape_mismatch={len(skipped)}"
+    )
 
 
 def run_stage(
@@ -165,6 +184,8 @@ def main():
     freeze_module(model.decoder)
     unfreeze_module(model.adapter)
 
+    answer_key = "answers" if args.dataset in {"ocr_vqa", "docvqa"} else None
+
     dataloader_a = build_dataloader(
         dataset_name=args.dataset,
         tokenizer=tokenizer,
@@ -172,6 +193,7 @@ def main():
         workers=args.num_workers,
         max_len=args.max_len,
         max_res=args.max_res,
+        answer_key=answer_key,
     )
     optimizer_a = torch.optim.AdamW(
         filter(lambda p: p.requires_grad, model.parameters()),
@@ -203,6 +225,7 @@ def main():
         workers=args.num_workers,
         max_len=args.max_len,
         max_res=args.max_res,
+        answer_key=answer_key,
     )
 
     optimizer_b = torch.optim.AdamW(

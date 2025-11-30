@@ -191,12 +191,14 @@ class TextImagePairStream(IterableDataset):
         split: str = "train",
         text_key: str = "text",
         image_key: str = "image",
+        answer_key: str = None,
         max_size: int = 1024,
         seed: int = 0,
     ):
         super().__init__()
         self.text_key = text_key
         self.image_key = image_key
+        self.answer_key = answer_key
         self.max_size = max_size
         self.ds = datasets.load_dataset(dataset_name, split=split, streaming=True)
         self.iter = iter(self.ds.shuffle(buffer_size=2048, seed=seed))
@@ -218,7 +220,15 @@ class TextImagePairStream(IterableDataset):
             except StopIteration:
                 self.iter = iter(self.ds.shuffle(buffer_size=2048))
                 sample = next(self.iter)
-            text = sample[self.text_key]
+            text = None
+            if self.answer_key and self.answer_key in sample:
+                ans = sample[self.answer_key]
+                if isinstance(ans, (list, tuple)) and len(ans) > 0:
+                    text = ans[0]
+            if text is None:
+                text = sample.get(self.text_key, None)
+            if text is None:
+                continue
             img = self._get_image(sample)
             img = resize_and_pad(img, max_size=self.max_size)
             img_tensor = TF.to_tensor(img)
