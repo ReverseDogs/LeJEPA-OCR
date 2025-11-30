@@ -114,10 +114,10 @@ class HybridDocumentStream(IterableDataset):
                         print(f"[HybridDocumentStream] No local PDFa tar shards found in {local_dir}")
 
                 if not urls:
-                urls = (
-                    "https://huggingface.co/datasets/pixparse/pdfa-eng-wds/resolve/main/"
-                    "pdfa-eng-train-{000000..000099}.tar"
-                )
+                    urls = (
+                        "https://huggingface.co/datasets/pixparse/pdfa-eng-wds/resolve/main/"
+                        "pdfa-eng-train-{000000..000099}.tar"
+                    )
 
                 ds = (
                     wds.WebDataset(
