@@ -80,10 +80,21 @@ class HybridDocumentStream(IterableDataset):
         self.mask_ratio = mask_ratio
         self.rng = random.Random(seed)
         self.pdfa_local_dir = pdfa_local_dir or os.environ.get("PDFA_WDS_DIR")
-        self.sources = [
+
+        allow_stream_pdfa = os.environ.get("ALLOW_PDFA_STREAM", "0") == "1"
+        include_pdfa = self.pdfa_local_dir is not None or allow_stream_pdfa
+
+        base_sources = [
             ("rvl_cdip", 0.5, "hf", "chainyo/rvl-cdip"),
-            ("pdfa", 0.3, "wds", None),
             ("cord", 0.2, "hf", "naver-clova-ix/cord-v2"),
+        ]
+        if include_pdfa:
+            base_sources.insert(1, ("pdfa", 0.3, "wds", None))
+
+        total_weight = sum(w for _, w, _, _ in base_sources)
+        self.sources = [
+            (name, weight / total_weight, kind, hf_name)
+            for name, weight, kind, hf_name in base_sources
         ]
         self.source_names = [name for name, _, _, _ in self.sources]
         self.datasets = {}
@@ -103,17 +114,17 @@ class HybridDocumentStream(IterableDataset):
                         print(f"[HybridDocumentStream] No local PDFa tar shards found in {local_dir}")
 
                 if not urls:
-                    urls = (
-                        "https://huggingface.co/datasets/pixparse/pdfa-eng-wds/resolve/main/"
-                        "pdfa-eng-train-{000000..000099}.tar"
-                    )
+                urls = (
+                    "https://huggingface.co/datasets/pixparse/pdfa-eng-wds/resolve/main/"
+                    "pdfa-eng-train-{000000..000099}.tar"
+                )
 
                 ds = (
                     wds.WebDataset(
                         urls,
-                        resampled=True,
+                        resampled=False,
                         handler=wds.handlers.warn_and_continue,
-                        shardshuffle=True,
+                        shardshuffle=1000,
                     )
                     .shuffle(1000)
                     .decode("pil")
