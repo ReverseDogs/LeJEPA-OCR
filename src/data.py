@@ -195,6 +195,7 @@ class TextImagePairStream(IterableDataset):
         max_size: int = 1024,
         seed: int = 0,
         max_samples: Optional[int] = None,
+        streaming: bool = True,
     ):
         super().__init__()
         self.text_key = text_key
@@ -202,13 +203,23 @@ class TextImagePairStream(IterableDataset):
         self.answer_key = answer_key
         self.max_size = max_size
         self.max_samples = max_samples
-        # If TEXT_SHUFFLE_BUFFER=0, disable shuffle to avoid blocking on large buffers.
-        shuffle_buf = int(os.environ.get("TEXT_SHUFFLE_BUFFER", "128"))
-        self.ds = datasets.load_dataset(dataset_name, split=split, streaming=True)
-        if shuffle_buf <= 0:
-            self.iter = iter(self.ds)
+        env_stream = os.environ.get("TEXT_STREAMING", "1") != "0"
+        self.streaming = streaming and env_stream
+
+        if self.streaming:
+            # If TEXT_SHUFFLE_BUFFER=0, disable shuffle to avoid blocking on large buffers.
+            shuffle_buf = int(os.environ.get("TEXT_SHUFFLE_BUFFER", "128"))
+            self.ds = datasets.load_dataset(dataset_name, split=split, streaming=True)
+            if shuffle_buf <= 0:
+                self.iter = iter(self.ds)
+            else:
+                self.iter = iter(self.ds.shuffle(buffer_size=shuffle_buf, seed=seed))
         else:
-            self.iter = iter(self.ds.shuffle(buffer_size=shuffle_buf, seed=seed))
+            # Offline subset load to avoid streaming stalls.
+            if max_samples is not None:
+                split = f"{split}[0:{max_samples}]"
+            self.ds = datasets.load_dataset(dataset_name, split=split, streaming=False)
+            self.iter = None  # created per __iter__
 
     def _get_image(self, sample: Dict) -> Image.Image:
         img = sample[self.image_key]
@@ -225,15 +236,24 @@ class TextImagePairStream(IterableDataset):
         while True:
             if self.max_samples is not None and yielded >= self.max_samples:
                 return
-            try:
-                sample = next(self.iter)
-            except StopIteration:
-                shuffle_buf = int(os.environ.get("TEXT_SHUFFLE_BUFFER", "128"))
-                if shuffle_buf <= 0:
+            if self.streaming:
+                try:
+                    sample = next(self.iter)
+                except StopIteration:
+                    shuffle_buf = int(os.environ.get("TEXT_SHUFFLE_BUFFER", "128"))
+                    if shuffle_buf <= 0:
+                        self.iter = iter(self.ds)
+                    else:
+                        self.iter = iter(self.ds.shuffle(buffer_size=shuffle_buf))
+                    sample = next(self.iter)
+            else:
+                if self.iter is None:
                     self.iter = iter(self.ds)
-                else:
-                    self.iter = iter(self.ds.shuffle(buffer_size=shuffle_buf))
-                sample = next(self.iter)
+                try:
+                    sample = next(self.iter)
+                except StopIteration:
+                    return
+
             text = None
             if self.answer_key and self.answer_key in sample:
                 ans = sample[self.answer_key]
