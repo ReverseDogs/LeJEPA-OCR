@@ -127,7 +127,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", type=str, required=True, help="HF dataset with image/text fields.")
     parser.add_argument("--checkpoint", type=str, default="", help="Phase 2 checkpoint path.")
-    parser.add_argument("--backbone", type=str, default="vit_large_patch14_siglip_384")
+    parser.add_argument("--backbone", type=str, default="vit_large_patch16_siglip_384")
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--max-len", type=int, default=512)

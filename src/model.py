@@ -12,7 +12,7 @@ import timm
 class VisionConfig:
     """Configuration for the adaptive SigLIP-style ViT backbone."""
 
-    backbone: str = "vit_large_patch14_siglip_384"
+    backbone: str = "vit_large_patch16_siglip_384"
     pretrained: bool = False
     img_size: Optional[int] = None  # None enables fully dynamic shapes
     drop_rate: float = 0.1
@@ -56,16 +56,26 @@ class VisionBackbone(nn.Module):
 
     def __init__(self, cfg: VisionConfig):
         super().__init__()
-        self.model = timm.create_model(
-            cfg.backbone,
-            pretrained=cfg.pretrained,
-            num_classes=0,
-            global_pool="",
-            img_size=cfg.img_size,
-            drop_rate=cfg.drop_rate,
-            drop_path_rate=cfg.drop_path_rate,
-            dynamic_img_size=True,
-        )
+        try:
+            self.model = timm.create_model(
+                cfg.backbone,
+                pretrained=cfg.pretrained,
+                num_classes=0,
+                global_pool="",
+                img_size=cfg.img_size,
+                drop_rate=cfg.drop_rate,
+                drop_path_rate=cfg.drop_path_rate,
+                dynamic_img_size=True,
+            )
+        except RuntimeError as e:
+            if "Unknown model" in str(e):
+                candidates = [m for m in timm.list_models() if "siglip" in m]
+                hint = ", ".join(candidates[:10])
+                raise ValueError(
+                    f"Backbone '{cfg.backbone}' not found in timm. "
+                    f"Try one of: {hint}"
+                ) from e
+            raise
         # Many SigLIP variants expose num_features and patch_embed attributes.
         self.embed_dim = getattr(self.model, "num_features", None) or getattr(
             self.model, "embed_dim", None

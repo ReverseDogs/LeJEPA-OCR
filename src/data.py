@@ -80,6 +80,7 @@ class HybridDocumentStream(IterableDataset):
             ("pdfa", 0.3, "wds", None),
             ("cord", 0.2, "hf", "naver-clova-ix/cord-v2"),
         ]
+        self.source_names = [name for name, _, _, _ in self.sources]
         self.datasets = {}
         self.iters = {}
         for name, _, kind, hf_name in self.sources:
@@ -128,7 +129,7 @@ class HybridDocumentStream(IterableDataset):
 
     def __iter__(self) -> Iterator[Dict[str, torch.Tensor]]:
         while True:
-            name = self.rng.choices([n for n, _ in self.sources], weights=self.weights, k=1)[0]
+            name = self.rng.choices(self.source_names, weights=self.weights, k=1)[0]
             sample = self._next_sample(name)
             img = self._get_image(sample)
             img = resize_and_pad(img, max_size=self.max_size)

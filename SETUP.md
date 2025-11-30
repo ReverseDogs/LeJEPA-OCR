@@ -58,7 +58,7 @@ PY
 
 ```bash
 python train_lejepa.py \
-  --backbone vit_large_patch14_siglip_384 \
+  --backbone vit_large_patch16_siglip_384 \
   --batch-size 4 \
   --grad-accum 32 \
   --max-res 1024 \

@@ -68,7 +68,7 @@ def main():
     parser.add_argument("--save-dir", type=str, default="checkpoints/phase2")
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--max-res", type=int, default=1024)
-    parser.add_argument("--backbone", type=str, default="vit_large_patch14_siglip_384")
+    parser.add_argument("--backbone", type=str, default="vit_large_patch16_siglip_384")
     args = parser.parse_args()
 
     accelerator = Accelerator()
