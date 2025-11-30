@@ -190,7 +190,11 @@ def main():
     freeze_module(model.decoder)
     unfreeze_module(model.adapter)
 
-    answer_key = "answers" if args.dataset in {"ocr_vqa", "docvqa"} else None
+    lower_name = args.dataset.lower()
+    if args.dataset in {"ocr_vqa", "docvqa"} or "ocr-vqa" in lower_name:
+        answer_key = "answers"
+    else:
+        answer_key = None
 
     dataloader_a = build_dataloader(
         dataset_name=args.dataset,
