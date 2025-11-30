@@ -15,7 +15,7 @@ import math
 import os
 import random
 from io import BytesIO
-from typing import Dict, Iterator, Tuple
+from typing import Dict, Iterator, Optional, Tuple
 
 import datasets
 import torch
@@ -194,12 +194,14 @@ class TextImagePairStream(IterableDataset):
         answer_key: str = None,
         max_size: int = 1024,
         seed: int = 0,
+        max_samples: Optional[int] = None,
     ):
         super().__init__()
         self.text_key = text_key
         self.image_key = image_key
         self.answer_key = answer_key
         self.max_size = max_size
+        self.max_samples = max_samples
         # If TEXT_SHUFFLE_BUFFER=0, disable shuffle to avoid blocking on large buffers.
         shuffle_buf = int(os.environ.get("TEXT_SHUFFLE_BUFFER", "128"))
         self.ds = datasets.load_dataset(dataset_name, split=split, streaming=True)
@@ -219,7 +221,10 @@ class TextImagePairStream(IterableDataset):
         return Image.open(img).convert("RGB")
 
     def __iter__(self) -> Iterator[Dict[str, torch.Tensor]]:
+        yielded = 0
         while True:
+            if self.max_samples is not None and yielded >= self.max_samples:
+                return
             try:
                 sample = next(self.iter)
             except StopIteration:
@@ -241,4 +246,5 @@ class TextImagePairStream(IterableDataset):
             img = self._get_image(sample)
             img = resize_and_pad(img, max_size=self.max_size)
             img_tensor = TF.to_tensor(img)
+            yielded += 1
             yield {"image": img_tensor, "text": text}

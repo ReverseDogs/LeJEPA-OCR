@@ -36,12 +36,14 @@ def build_dataloader(
     max_res: int,
     answer_key: str = None,
     split: str = "train",
+    limit_samples: int = None,
 ) -> DataLoader:
     dataset = TextImagePairStream(
         dataset_name=dataset_name,
         split=split,
         max_size=max_res,
         answer_key=answer_key,
+        max_samples=limit_samples,
     )
 
     def collate(batch):
@@ -148,6 +150,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", type=str, required=True, help="HF dataset with image/text fields.")
     parser.add_argument("--split", type=str, default="train", help="HF split, e.g., train[:2048] to test quickly.")
+    parser.add_argument("--limit-samples", type=int, default=None, help="Optional cap on samples per epoch.")
     parser.add_argument("--checkpoint", type=str, default="", help="Phase 2 checkpoint path.")
     parser.add_argument("--backbone", type=str, default="vit_large_patch16_siglip_384")
     parser.add_argument("--batch-size", type=int, default=8)
@@ -198,6 +201,7 @@ def main():
         max_res=args.max_res,
         answer_key=answer_key,
         split=args.split,
+        limit_samples=args.limit_samples,
     )
     optimizer_a = torch.optim.AdamW(
         filter(lambda p: p.requires_grad, model.parameters()),
@@ -231,6 +235,7 @@ def main():
         max_res=args.max_res,
         answer_key=answer_key,
         split=args.split,
+        limit_samples=args.limit_samples,
     )
 
     optimizer_b = torch.optim.AdamW(
