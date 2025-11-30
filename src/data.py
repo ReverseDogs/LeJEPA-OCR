@@ -133,13 +133,13 @@ class HybridDocumentStream(IterableDataset):
                 self.iters[name] = iter(ds)
         self.weights = [w for _, w, _, _ in self.sources]
 
-    def _get_image(self, sample: Dict) -> Image.Image:
+    def _get_image(self, sample: Dict) -> Image.Image | None:
         for key in ("image", "img", "jpg", "jpeg", "png"):
             if key in sample:
                 img = sample[key]
                 break
         else:
-            raise KeyError("No image key found in sample.")
+            return None
 
         if isinstance(img, Image.Image):
             return img.convert("RGB")
@@ -167,6 +167,8 @@ class HybridDocumentStream(IterableDataset):
             name = self.rng.choices(self.source_names, weights=self.weights, k=1)[0]
             sample = self._next_sample(name)
             img = self._get_image(sample)
+            if img is None:
+                continue
             img = resize_and_pad(img, max_size=self.max_size)
             img_tensor = TF.to_tensor(img)  # (C, H, W)
             context = blockwise_mask(img_tensor, self.mask_ratio)
