@@ -1,0 +1,15 @@
+Label the 50M Labelled OCR Pairs with the HunyuanOCR model from Hugging Face https://huggingface.co/tencent/HunyuanOCR
+The HunyuanOCR model could also be used for evaluation. 
+
+Critical Fixes Needed, if not already fixed:
+
+Fix SIGReg DDP synchronization (will break multi-GPU)
+Fix prediction loss (use centering, not naive MSE)
+Leverage training loss for model selection (no labels needed!)
+
+What changed:
+
+We disabled streaming and forced an offline load, so it actually downloaded the OCR-VQA tar shards and built the splits. That’s why you saw the big downloads and “Generating train/validation/test split…” logs. The earlier hang was the streaming shuffle buffer never filling; now the data is local.
+Why it still failed:
+
+Our code only sets answer_key="answers" when --dataset is exactly ocr_vqa or docvqa. With howard-hou/OCR-VQA it treated answer_key=None, so every sample was skipped (no text field), and the dataloader hit “Batch does not contain any data”.

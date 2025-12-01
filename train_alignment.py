@@ -162,6 +162,11 @@ def main():
     parser.add_argument("--lr-probe", type=float, default=1e-3, help="Stage A adapter lr.")
     parser.add_argument("--lr-handshake", type=float, default=1e-5, help="Stage B adapter/decoder lr.")
     parser.add_argument("--lr-vit", type=float, default=1e-6, help="Stage B ViT lr.")
+    parser.add_argument(
+        "--skip-stage-a",
+        action="store_true",
+        help="Skip Stage A (probe) and start directly with Stage B (handshake).",
+    )
     parser.add_argument("--stage-a-steps", type=int, default=1000)
     parser.add_argument("--stage-b-steps", type=int, default=2000)
     parser.add_argument("--tokenizer", type=str, default="tencent/HunyuanOCR")
@@ -186,44 +191,46 @@ def main():
     model.drop_projector()  # Discard LeJEPA projector for alignment.
 
     # Stage A: freeze ViT + decoder, train adapter only.
-    freeze_module(model.vision)
-    freeze_module(model.decoder)
-    unfreeze_module(model.adapter)
-
     lower_name = args.dataset.lower()
     if args.dataset in {"ocr_vqa", "docvqa"} or "ocr-vqa" in lower_name:
         answer_key = "answers"
     else:
         answer_key = None
+    if args.skip_stage_a:
+        accelerator.print("Skipping Stage A: starting Stage B directly.")
+    else:
+        freeze_module(model.vision)
+        freeze_module(model.decoder)
+        unfreeze_module(model.adapter)
 
-    dataloader_a = build_dataloader(
-        dataset_name=args.dataset,
-        tokenizer=tokenizer,
-        batch_size=args.batch_size,
-        workers=args.num_workers,
-        max_len=args.max_len,
-        max_res=args.max_res,
-        answer_key=answer_key,
-        split=args.split,
-        limit_samples=args.limit_samples,
-    )
-    optimizer_a = torch.optim.AdamW(
-        filter(lambda p: p.requires_grad, model.parameters()),
-        lr=args.lr_probe,
-        weight_decay=args.weight_decay,
-    )
+        dataloader_a = build_dataloader(
+            dataset_name=args.dataset,
+            tokenizer=tokenizer,
+            batch_size=args.batch_size,
+            workers=args.num_workers,
+            max_len=args.max_len,
+            max_res=args.max_res,
+            answer_key=answer_key,
+            split=args.split,
+            limit_samples=args.limit_samples,
+        )
+        optimizer_a = torch.optim.AdamW(
+            filter(lambda p: p.requires_grad, model.parameters()),
+            lr=args.lr_probe,
+            weight_decay=args.weight_decay,
+        )
 
-    model = run_stage(
-        accelerator,
-        model,
-        dataloader_a,
-        optimizer_a,
-        steps=args.stage_a_steps,
-        pad_token_id=tokenizer.pad_token_id,
-        stage_name="StageA-Probe",
-        grad_accum=args.grad_accum,
-        log_every=args.log_every,
-    )
+        model = run_stage(
+            accelerator,
+            model,
+            dataloader_a,
+            optimizer_a,
+            steps=args.stage_a_steps,
+            pad_token_id=tokenizer.pad_token_id,
+            stage_name="StageA-Probe",
+            grad_accum=args.grad_accum,
+            log_every=args.log_every,
+        )
 
     # Stage B: unfreeze ViT; train adapter + decoder + ViT with differential LRs.
     unfreeze_module(model.vision)

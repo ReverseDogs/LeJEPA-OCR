@@ -1,0 +1,13 @@
+LeJEPA-OCR: Latest status
+
+- Phase 2: Pretrain finished; checkpoint at `checkpoints/phase2/step_5000.pt`.
+- Phase 3 alignment (two runs): final high-capacity run (batch 2, max-res 896, longer Stage B) produced `checkpoints/phase3/phase3_final.pt` and backup `/workspace/vol/backups/phase3_final_896res.pt`.
+- Streaming fixes: set `TEXT_STREAMING=0`, reduced shuffle buffers, moved to offline loading; added OCR-VQA answer-key mapping (howard-hou/OCR-VQA).
+- Eval: offline val loss over ~500 samples = 8.454 (better than baseline/random ~11.7 and earlier runs). Decoder still unpretrained so qualitative decodes are filler; loss is the meaningful signal.
+- Notes: code in GitHub; checkpoints backed up; HF cache optional.
+
+Next steps
+
+1) Optionally run the same eval on the previous Phase 3 checkpoint and keep whichever yields lower loss.  
+2) Add a resume/skip-Stage-A flag to fine-tune Stage B only, or tweak LRs/steps for another pass.  
+3) When ready, move to downstream evals or add a supervised OCR objective/decoder pretrain to get meaningful decodes.
