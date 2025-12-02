@@ -253,14 +253,30 @@ class TextImagePairStream(IterableDataset):
                     sample = next(self.iter)
                 except StopIteration:
                     return
-
+            # Prefer Q/A pairs when present (e.g., OCR-VQA) to avoid unconditioned answers.
             text = None
+            answer = None
+            question = None
             if self.answer_key and self.answer_key in sample:
                 ans = sample[self.answer_key]
                 if isinstance(ans, (list, tuple)) and len(ans) > 0:
-                    text = ans[0]
-            if text is None:
+                    answer = ans[0]
+                elif isinstance(ans, str):
+                    answer = ans
+
+            # Common fields for questions
+            if "question" in sample and isinstance(sample["question"], str):
+                question = sample["question"]
+            elif "questions" in sample and isinstance(sample["questions"], (list, tuple)) and sample["questions"]:
+                question = sample["questions"][0]
+
+            if question and answer:
+                text = f"Question: {question}\nAnswer: {answer}"
+            elif answer is not None:
+                text = answer
+            else:
                 text = sample.get(self.text_key, None)
+
             if text is None:
                 continue
             img = self._get_image(sample)
