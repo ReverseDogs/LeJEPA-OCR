@@ -215,10 +215,41 @@ class TextImagePairStream(IterableDataset):
             else:
                 self.iter = iter(self.ds.shuffle(buffer_size=shuffle_buf, seed=seed))
         else:
-            # Offline subset load to avoid streaming stalls.
-            if max_samples is not None:
-                split = f"{split}[0:{max_samples}]"
-            self.ds = datasets.load_dataset(dataset_name, split=split, streaming=False)
+            # Offline subset load to avoid streaming stalls. Handle on-disk datasets saved via save_to_disk.
+            if Path(dataset_name).exists():
+                loaded = datasets.load_from_disk(dataset_name)
+                if hasattr(loaded, "keys"):
+                    # DatasetDict
+                    if split in loaded:
+                        self.ds = loaded[split]
+                    else:
+                        first_split = next(iter(loaded.keys()))
+                        self.ds = loaded[first_split]
+                else:
+                    self.ds = loaded
+                if max_samples is not None:
+                    self.ds = self.ds.select(range(min(len(self.ds), max_samples)))
+            else:
+                if max_samples is not None:
+                    split = f"{split}[0:{max_samples}]"
+                try:
+                    self.ds = datasets.load_dataset(dataset_name, split=split, streaming=False)
+                except ValueError as e:
+                    # Fallback for datasets saved via save_to_disk but not caught above.
+                    if "save_to_disk" in str(e):
+                        loaded = datasets.load_from_disk(dataset_name)
+                        if hasattr(loaded, "keys"):
+                            if split in loaded:
+                                self.ds = loaded[split]
+                            else:
+                                first_split = next(iter(loaded.keys()))
+                                self.ds = loaded[first_split]
+                        else:
+                            self.ds = loaded
+                        if max_samples is not None:
+                            self.ds = self.ds.select(range(min(len(self.ds), max_samples)))
+                    else:
+                        raise
             self.iter = None  # created per __iter__
 
     def _get_image(self, sample: Dict) -> Image.Image:
